@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import PushNotifications from "@/components/push-notifications";
 import {
   completeGame,
   dayThemes,
@@ -162,6 +163,7 @@ export default function DirettorePage() {
           <div><p>Black Edition · Pannello di controllo</p><h1>Hot Money</h1></div>
           <div className="admin__header-actions">
             <span className="admin__role">Direttore</span>
+            <PushNotifications role="director" className="admin-button" />
             <button className="admin-button" type="button" onClick={logout}>Esci</button>
             <button className="admin-button admin-button--reset" type="button" onClick={() => setShowResetConfirm(true)}>
               &#8635; Reset gioco

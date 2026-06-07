@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import PushNotifications from "@/components/push-notifications";
 import {
   chooseTemptation,
   formatCurrency,
@@ -175,6 +176,7 @@ export default function ConcorrentePage() {
         <header className="contestant__header">
           <p>Black Edition</p>
           <h1>Hot Money</h1>
+          <PushNotifications role="contestant" className="admin-button" />
           <button className="admin-button" type="button" onClick={logout}>Esci</button>
         </header>
 
