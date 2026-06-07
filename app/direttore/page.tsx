@@ -1,16 +1,20 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   completeGame,
   dayThemes,
   formatCurrency,
   formatDateTime,
+  loadRemoteDailyChallenges,
+  loadRemoteGameState,
   resetContract,
   resetEvidence,
   resetGame,
   reviewEvidence,
+  subscribeToRemoteDailyChallenges,
+  subscribeToRemoteGameState,
   updateGameState,
   useGameStore,
 } from "@/lib/game-store";
@@ -18,9 +22,51 @@ import {
 export default function DirettorePage() {
   const router = useRouter();
   const game = useGameStore();
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [accessError, setAccessError] = useState("");
   const [prizeChange, setPrizeChange] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [supabaseConnected, setSupabaseConnected] = useState(false);
+
+  useEffect(() => {
+    setAuthorized(window.localStorage.getItem("hot-money-director-access") === "true");
+  }, []);
+
+  useEffect(() => {
+    if (!authorized) return;
+    void loadRemoteGameState().then((remoteState) => {
+      setSupabaseConnected(remoteState !== false);
+      if (remoteState) console.log("REMOTE PRIZE POOL", remoteState.prize_pool);
+    });
+    void loadRemoteDailyChallenges();
+    const unsubscribeGameState = subscribeToRemoteGameState();
+    const unsubscribeChallenges = subscribeToRemoteDailyChallenges();
+    return () => {
+      unsubscribeGameState();
+      unsubscribeChallenges();
+    };
+  }, [authorized]);
+
+  function handleAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const password = String(new FormData(event.currentTarget).get("password") ?? "");
+
+    if (password !== "andrea198585") {
+      setAccessError("Password non valida");
+      return;
+    }
+
+    window.localStorage.setItem("hot-money-director-access", "true");
+    setAccessError("");
+    setAuthorized(true);
+  }
+
+  function logout() {
+    window.localStorage.removeItem("hot-money-director-access");
+    setAuthorized(false);
+    setSupabaseConnected(false);
+  }
 
   function getEvidenceStatus(day: number) {
     const submission = game.evidence.find((item) => item.day === day);
@@ -74,6 +120,16 @@ export default function DirettorePage() {
     updateGameState({ rules: String(data.get("rules") ?? "") });
   }
 
+  function saveSupabaseState(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    updateGameState({
+      directorOrgasms: Math.max(0, Number(data.get("directorOrgasms")) || 0),
+      contestantOrgasms: Math.max(0, Number(data.get("contestantOrgasms")) || 0),
+      notes: String(data.get("notes") ?? ""),
+    });
+  }
+
   function finishGame() {
     completeGame();
     router.push("/finale");
@@ -88,6 +144,32 @@ export default function DirettorePage() {
     window.setTimeout(() => setResetSuccess(false), 4000);
   }
 
+  if (!authorized) {
+    return (
+      <main className="login-page">
+        <div className="home__frame" aria-hidden="true">
+          <span className="home__corner home__corner--top-left" />
+          <span className="home__corner home__corner--top-right" />
+          <span className="home__corner home__corner--bottom-left" />
+          <span className="home__corner home__corner--bottom-right" />
+        </div>
+        <section className="login" aria-labelledby="director-login-title">
+          <div className="hero__edition"><span /><p>Black Edition</p><span /></div>
+          <h1 id="director-login-title" className="login__logo">Hot Money</h1>
+          <div className="login__diamond" aria-hidden="true" />
+          <form className="login__card" onSubmit={handleAccess}>
+            <div className="login__field">
+              <label htmlFor="director-password">Accesso Direttore</label>
+              <input id="director-password" name="password" type="password" autoComplete="current-password" required />
+            </div>
+            {accessError && <p className="login__error" role="alert">{accessError}</p>}
+            <button className="login__button" type="submit"><span>Accedi</span><span className="hero__button-arrow">&rarr;</span></button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="admin-page">
       <div className="admin">
@@ -95,6 +177,7 @@ export default function DirettorePage() {
           <div><p>Black Edition · Pannello di controllo</p><h1>Hot Money</h1></div>
           <div className="admin__header-actions">
             <span className="admin__role">Direttore</span>
+            <button className="admin-button" type="button" onClick={logout}>Esci</button>
             <button className="admin-button admin-button--reset" type="button" onClick={() => setShowResetConfirm(true)}>
               &#8635; Reset gioco
             </button>
@@ -135,6 +218,19 @@ export default function DirettorePage() {
               <div className="admin-person__identity"><strong>{game.contestant.name}</strong><span>Stato · Attiva</span></div>
               <span className="admin-badge">Attiva</span>
             </article>
+          </section>
+
+          <section className="admin-card admin-card--wide">
+            <div className="admin-card__header">
+              <div><p>Stato condiviso Supabase</p><h2>Dati partita</h2></div>
+              <span className="admin-badge">{supabaseConnected ? "Supabase connesso" : "Fallback locale"}</span>
+            </div>
+            <form key={`shared-${game.updatedAt ?? "local"}`} className="admin-form" onSubmit={saveSupabaseState}>
+              <label><span>Orgasmi Direttore</span><input name="directorOrgasms" type="number" min="0" defaultValue={game.directorOrgasms} /></label>
+              <label><span>Orgasmi Concorrente</span><input name="contestantOrgasms" type="number" min="0" defaultValue={game.contestantOrgasms} /></label>
+              <label><span>Note</span><textarea name="notes" defaultValue={game.notes} /></label>
+              <button className="admin-button admin-button--primary" type="submit">Salva dati partita</button>
+            </form>
           </section>
 
           <section id="missione" className="admin-card">

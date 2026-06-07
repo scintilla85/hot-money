@@ -1,10 +1,14 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import {
   chooseTemptation,
   formatCurrency,
+  loadRemoteDailyChallenges,
+  loadRemoteGameState,
   signContract,
+  subscribeToRemoteDailyChallenges,
+  subscribeToRemoteGameState,
   submitEvidence,
   useGameStore,
 } from "@/lib/game-store";
@@ -13,6 +17,8 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 export default function ConcorrentePage() {
   const game = useGameStore();
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [accessError, setAccessError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const [media, setMedia] = useState<{
     dataUrl: string;
@@ -23,6 +29,41 @@ export default function ConcorrentePage() {
   const contestant = game.contestant;
   const currentDayTheme = game.dayTitle;
   const temptationChoice = game.temptationChoices[game.currentDay - 1];
+
+  useEffect(() => {
+    setAuthorized(window.localStorage.getItem("hot-money-contestant-access") === "true");
+  }, []);
+
+  useEffect(() => {
+    if (!authorized) return;
+    void loadRemoteGameState();
+    void loadRemoteDailyChallenges();
+    const unsubscribeGameState = subscribeToRemoteGameState();
+    const unsubscribeChallenges = subscribeToRemoteDailyChallenges();
+    return () => {
+      unsubscribeGameState();
+      unsubscribeChallenges();
+    };
+  }, [authorized]);
+
+  function handleAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const password = String(new FormData(event.currentTarget).get("password") ?? "");
+
+    if (password !== "alice1990") {
+      setAccessError("Password non valida");
+      return;
+    }
+
+    window.localStorage.setItem("hot-money-contestant-access", "true");
+    setAccessError("");
+    setAuthorized(true);
+  }
+
+  function logout() {
+    window.localStorage.removeItem("hot-money-contestant-access");
+    setAuthorized(false);
+  }
 
   function handleContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,6 +123,32 @@ export default function ConcorrentePage() {
     }
   }
 
+  if (!authorized) {
+    return (
+      <main className="login-page">
+        <div className="home__frame" aria-hidden="true">
+          <span className="home__corner home__corner--top-left" />
+          <span className="home__corner home__corner--top-right" />
+          <span className="home__corner home__corner--bottom-left" />
+          <span className="home__corner home__corner--bottom-right" />
+        </div>
+        <section className="login" aria-labelledby="contestant-login-title">
+          <div className="hero__edition"><span /><p>Black Edition</p><span /></div>
+          <h1 id="contestant-login-title" className="login__logo">Hot Money</h1>
+          <div className="login__diamond" aria-hidden="true" />
+          <form className="login__card" onSubmit={handleAccess}>
+            <div className="login__field">
+              <label htmlFor="contestant-password">Accesso Concorrente</label>
+              <input id="contestant-password" name="password" type="password" autoComplete="current-password" required />
+            </div>
+            {accessError && <p className="login__error" role="alert">{accessError}</p>}
+            <button className="login__button" type="submit"><span>Accedi</span><span className="hero__button-arrow">&rarr;</span></button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
   if (!game.contractSigned) {
     return (
       <main className="contract-page">
@@ -95,6 +162,7 @@ export default function ConcorrentePage() {
             <label><span>Firma concorrente</span><input name="signature" type="text" autoComplete="name" required /></label>
             <button className="contestant__button" type="submit"><span>Firma e inizia il gioco</span><span>→</span></button>
           </form>
+          <button className="admin-button" type="button" onClick={logout}>Esci</button>
         </section>
       </main>
     );
@@ -107,7 +175,7 @@ export default function ConcorrentePage() {
         <header className="contestant__header">
           <p>Black Edition</p>
           <h1>Hot Money</h1>
-          <span>Concorrente</span>
+          <button className="admin-button" type="button" onClick={logout}>Esci</button>
         </header>
 
         <button className="contestant__button rules-toggle" type="button" aria-expanded={showRules} onClick={() => setShowRules((visible) => !visible)}>
@@ -127,7 +195,10 @@ export default function ConcorrentePage() {
           <div className="contestant-profile__stats">
             <div><span>Nome concorrente</span><strong>{contestant.name}</strong></div>
             <div><span>Stato</span><strong>Attiva</strong></div>
+            <div><span>Orgasmi Direttore</span><strong>{game.directorOrgasms}</strong></div>
+            <div><span>Orgasmi Concorrente</span><strong>{game.contestantOrgasms}</strong></div>
           </div>
+          {game.notes && <p className="contestant-mission__copy">{game.notes}</p>}
         </section>
 
         <section className="contestant-card contestant-mission">

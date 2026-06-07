@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type Contestant = {
   id: string;
@@ -37,6 +38,10 @@ export type GameState = {
   dayTitle: string;
   initialPrizePool: number;
   prizePool: number;
+  directorOrgasms: number;
+  contestantOrgasms: number;
+  notes: string;
+  updatedAt: string | null;
   missionTitle: string;
   missionDescription: string;
   temptationTitle: string;
@@ -136,6 +141,10 @@ const initialState: GameState = {
   dayTitle: initialDay.title,
   initialPrizePool: 300,
   prizePool: 300,
+  directorOrgasms: 0,
+  contestantOrgasms: 0,
+  notes: "",
+  updatedAt: null,
   missionTitle: initialDay.missionTitle,
   missionDescription: initialDay.missionDescription,
   temptationTitle: initialDay.temptationTitle,
@@ -156,6 +165,28 @@ const initialState: GameState = {
 
 let state = initialState;
 let hydrated = false;
+let realtimeSubscribers = 0;
+let realtimeChannel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
+
+export type RemoteGameState = {
+  current_day: number;
+  prize_pool: number;
+  director_orgasms: number;
+  contestant_orgasms: number;
+  notes: string | null;
+  updated_at: string | null;
+};
+
+type RemoteDailyChallenge = {
+  id: number;
+  day_number: number;
+  title: string;
+  objective: string;
+  description: string;
+  temptation_text: string;
+  temptation_value: number;
+  updated_at: string | null;
+};
 
 function normalizeState(value: Partial<GameState>): GameState {
   const currentDay = Math.min(7, Math.max(1, Number(value.currentDay) || initialState.currentDay));
@@ -184,6 +215,186 @@ function persist() {
   window.dispatchEvent(new Event(EVENT_NAME));
 }
 
+function remoteUpdates(updates: Partial<GameState>) {
+  const remote: Partial<RemoteGameState> = {};
+
+  if (updates.currentDay !== undefined) remote.current_day = updates.currentDay;
+  if (updates.prizePool !== undefined) remote.prize_pool = updates.prizePool;
+  if (updates.directorOrgasms !== undefined) remote.director_orgasms = updates.directorOrgasms;
+  if (updates.contestantOrgasms !== undefined) remote.contestant_orgasms = updates.contestantOrgasms;
+  if (updates.notes !== undefined) remote.notes = updates.notes;
+
+  return remote;
+}
+
+async function syncToSupabase(updates: Partial<GameState>) {
+  if (!supabase) return;
+  const remote = remoteUpdates(updates);
+  if (Object.keys(remote).length === 0) return;
+
+  try {
+    await supabase.from("game_state").update(remote).eq("id", 1);
+  } catch {
+    // The local state remains the fallback when Supabase is unavailable.
+  }
+}
+
+function encodeTemptation(day: GameDay) {
+  return JSON.stringify({
+    title: day.temptationTitle,
+    description: day.temptationDescription ?? "",
+  });
+}
+
+function decodeTemptation(value: string) {
+  try {
+    const parsed = JSON.parse(value) as { title?: string; description?: string };
+    return {
+      title: parsed.title ?? "",
+      description: parsed.description ?? "",
+    };
+  } catch {
+    return { title: value, description: "" };
+  }
+}
+
+function applyRemoteChallenge(challenge: RemoteDailyChallenge) {
+  if (challenge.day_number < 1 || challenge.day_number > 7) return;
+  const days = [...state.days];
+  const temptation = decodeTemptation(challenge.temptation_text);
+
+  days[challenge.day_number - 1] = {
+    title: challenge.title,
+    missionTitle: challenge.objective,
+    missionDescription: challenge.description,
+    temptationTitle: temptation.title,
+    temptationDescription: temptation.description,
+    temptationCost: challenge.temptation_value,
+  };
+  state = normalizeState({ ...state, days });
+  persist();
+}
+
+export async function loadRemoteDailyChallenges() {
+  if (!supabase) return false;
+
+  try {
+    const { data, error } = await supabase
+      .from("daily_challenges")
+      .select("id, day_number, title, objective, description, temptation_text, temptation_value, updated_at")
+      .order("day_number")
+      .returns<RemoteDailyChallenge[]>();
+
+    if (error || !data?.length) return false;
+    data.forEach(applyRemoteChallenge);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function syncDailyChallenge(dayNumber: number, day: GameDay) {
+  if (!supabase) return;
+
+  try {
+    await supabase.from("daily_challenges").upsert(
+      {
+        day_number: dayNumber,
+        title: day.title,
+        objective: day.missionTitle,
+        description: day.missionDescription,
+        temptation_text: encodeTemptation(day),
+        temptation_value: day.temptationCost,
+      },
+      { onConflict: "day_number" },
+    );
+  } catch {
+    // Local state remains available if Supabase cannot save the challenge.
+  }
+}
+
+export async function loadRemoteGameState() {
+  if (!supabase) return false;
+
+  try {
+    const { data, error } = await supabase
+      .from("game_state")
+      .select("current_day, prize_pool, director_orgasms, contestant_orgasms, notes, updated_at")
+      .eq("id", 1)
+      .limit(1)
+      .returns<RemoteGameState[]>();
+
+    if (error || !data?.[0]) return false;
+    applyRemoteState(data[0]);
+    console.log("Supabase game_state loaded");
+    return data[0];
+  } catch {
+    // The local state remains the fallback when Supabase is unavailable.
+    return false;
+  }
+}
+
+function applyRemoteState(data: RemoteGameState) {
+  state = normalizeState({
+    ...state,
+    currentDay: data.current_day,
+    prizePool: data.prize_pool,
+    directorOrgasms: data.director_orgasms,
+    contestantOrgasms: data.contestant_orgasms,
+    notes: data.notes ?? "",
+    updatedAt: data.updated_at,
+  });
+  persist();
+}
+
+export function subscribeToRemoteGameState() {
+  if (!supabase) return () => undefined;
+  const client = supabase;
+  realtimeSubscribers += 1;
+
+  if (!realtimeChannel) {
+    realtimeChannel = client
+    .channel("hot-money-game-state")
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "game_state", filter: "id=eq.1" },
+      (payload) => applyRemoteState(payload.new as RemoteGameState),
+    )
+    .subscribe();
+  }
+
+  return () => {
+    realtimeSubscribers = Math.max(0, realtimeSubscribers - 1);
+    if (realtimeSubscribers === 0 && realtimeChannel) {
+      void client.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+  };
+}
+
+export function subscribeToRemoteDailyChallenges() {
+  if (!supabase) return () => undefined;
+  const client = supabase;
+  const channel = client
+    .channel(`hot-money-daily-challenges-${crypto.randomUUID()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "daily_challenges" },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          void loadRemoteDailyChallenges();
+          return;
+        }
+        applyRemoteChallenge(payload.new as RemoteDailyChallenge);
+      },
+    )
+    .subscribe();
+
+  return () => {
+    void client.removeChannel(channel);
+  };
+}
+
 function readStoredState() {
   if (typeof window === "undefined" || hydrated) return;
   hydrated = true;
@@ -207,6 +418,7 @@ function getServerSnapshot() {
 
 function subscribe(callback: () => void) {
   if (typeof window === "undefined") return () => undefined;
+  void loadRemoteGameState();
 
   const handleStorage = (event: StorageEvent) => {
     if (event.key !== STORAGE_KEY) return;
@@ -275,6 +487,8 @@ export function updateGameState(updates: Partial<GameState>) {
     prizePoolHistory,
   });
   persist();
+  void syncToSupabase(updates);
+  if (changesDayContent) void syncDailyChallenge(state.currentDay, days[state.currentDay - 1]);
 }
 
 export function chooseTemptation(choice: Exclude<TemptationChoice, null>) {
@@ -296,6 +510,7 @@ export function chooseTemptation(choice: Exclude<TemptationChoice, null>) {
     prizePoolHistory,
   });
   persist();
+  void syncToSupabase({ prizePool: nextPrizePool });
 }
 
 export function submitEvidence(
@@ -377,6 +592,13 @@ export function resetGame() {
     prizePoolHistory: Array<number | null>(7).fill(null),
   };
   persist();
+  void syncToSupabase({
+    currentDay: state.currentDay,
+    prizePool: state.prizePool,
+    directorOrgasms: state.directorOrgasms,
+    contestantOrgasms: state.contestantOrgasms,
+    notes: state.notes,
+  });
 }
 
 export function useGameStore() {
