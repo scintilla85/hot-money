@@ -195,10 +195,7 @@ export default function ConcorrentePage() {
           <div className="contestant-profile__stats">
             <div><span>Nome concorrente</span><strong>{contestant.name}</strong></div>
             <div><span>Stato</span><strong>Attiva</strong></div>
-            <div><span>Orgasmi Direttore</span><strong>{game.directorOrgasms}</strong></div>
-            <div><span>Orgasmi Concorrente</span><strong>{game.contestantOrgasms}</strong></div>
           </div>
-          {game.notes && <p className="contestant-mission__copy">{game.notes}</p>}
         </section>
 
         <section className="contestant-card contestant-mission">

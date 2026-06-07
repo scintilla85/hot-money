@@ -27,7 +27,6 @@ export default function DirettorePage() {
   const [prizeChange, setPrizeChange] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
-  const [supabaseConnected, setSupabaseConnected] = useState(false);
 
   useEffect(() => {
     setAuthorized(window.localStorage.getItem("hot-money-director-access") === "true");
@@ -35,10 +34,7 @@ export default function DirettorePage() {
 
   useEffect(() => {
     if (!authorized) return;
-    void loadRemoteGameState().then((remoteState) => {
-      setSupabaseConnected(remoteState !== false);
-      if (remoteState) console.log("REMOTE PRIZE POOL", remoteState.prize_pool);
-    });
+    void loadRemoteGameState();
     void loadRemoteDailyChallenges();
     const unsubscribeGameState = subscribeToRemoteGameState();
     const unsubscribeChallenges = subscribeToRemoteDailyChallenges();
@@ -65,7 +61,6 @@ export default function DirettorePage() {
   function logout() {
     window.localStorage.removeItem("hot-money-director-access");
     setAuthorized(false);
-    setSupabaseConnected(false);
   }
 
   function getEvidenceStatus(day: number) {
@@ -118,16 +113,6 @@ export default function DirettorePage() {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     updateGameState({ rules: String(data.get("rules") ?? "") });
-  }
-
-  function saveSupabaseState(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    updateGameState({
-      directorOrgasms: Math.max(0, Number(data.get("directorOrgasms")) || 0),
-      contestantOrgasms: Math.max(0, Number(data.get("contestantOrgasms")) || 0),
-      notes: String(data.get("notes") ?? ""),
-    });
   }
 
   function finishGame() {
@@ -218,19 +203,6 @@ export default function DirettorePage() {
               <div className="admin-person__identity"><strong>{game.contestant.name}</strong><span>Stato · Attiva</span></div>
               <span className="admin-badge">Attiva</span>
             </article>
-          </section>
-
-          <section className="admin-card admin-card--wide">
-            <div className="admin-card__header">
-              <div><p>Stato condiviso Supabase</p><h2>Dati partita</h2></div>
-              <span className="admin-badge">{supabaseConnected ? "Supabase connesso" : "Fallback locale"}</span>
-            </div>
-            <form key={`shared-${game.updatedAt ?? "local"}`} className="admin-form" onSubmit={saveSupabaseState}>
-              <label><span>Orgasmi Direttore</span><input name="directorOrgasms" type="number" min="0" defaultValue={game.directorOrgasms} /></label>
-              <label><span>Orgasmi Concorrente</span><input name="contestantOrgasms" type="number" min="0" defaultValue={game.contestantOrgasms} /></label>
-              <label><span>Note</span><textarea name="notes" defaultValue={game.notes} /></label>
-              <button className="admin-button admin-button--primary" type="submit">Salva dati partita</button>
-            </form>
           </section>
 
           <section id="missione" className="admin-card">
