@@ -664,17 +664,24 @@ export function resetEvidence(id: string) {
   persist();
 }
 
-export function signContract(signer: string) {
+export async function signContract(signer: string) {
   readStoredState();
-  if (state.contractSigned || !signer.trim()) return;
-  state = {
-    ...state,
-    contractSigned: true,
-    contractSignedAt: new Date().toISOString(),
-    contractSigner: signer.trim(),
-  };
-  persist();
-  void advancedAction({ action: "sign_contract", signer });
+  if (state.contractSigned || !signer.trim()) return false;
+
+  const response = await fetch("/api/game/advanced", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sign_contract", signer: signer.trim() }),
+  });
+  const result = (await response.json()) as { data?: RemoteGameState; error?: string };
+
+  if (!response.ok || !result.data) {
+    throw new Error(result.error ?? "Firma non salvata");
+  }
+
+  applyRemoteState(result.data);
+  await loadRemoteGameState();
+  return true;
 }
 
 export function resetContract() {

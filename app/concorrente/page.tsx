@@ -28,6 +28,7 @@ export default function ConcorrentePage() {
     fileName: string;
   } | null>(null);
   const [message, setMessage] = useState("");
+  const [contractMessage, setContractMessage] = useState("");
   const [showRules, setShowRules] = useState(false);
   const contestant = game.contestant;
   const currentDayTheme = game.dayTitle;
@@ -76,10 +77,17 @@ export default function ConcorrentePage() {
     setAuthorized(false);
   }
 
-  function handleContract(event: FormEvent<HTMLFormElement>) {
+  async function handleContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    signContract(String(data.get("signature") ?? ""));
+    setContractMessage("");
+
+    try {
+      await signContract(String(data.get("signature") ?? ""));
+      await loadRemoteGameState();
+    } catch (error) {
+      setContractMessage(error instanceof Error ? error.message : "Firma non salvata");
+    }
   }
 
   function selectMedia(event: ChangeEvent<HTMLInputElement>) {
@@ -171,6 +179,7 @@ export default function ConcorrentePage() {
           <form className="contract-form" onSubmit={handleContract}>
             <label className="contract-accept"><input name="accepted" type="checkbox" required /><span>Accetto il regolamento</span></label>
             <label><span>Firma concorrente</span><input name="signature" type="text" autoComplete="name" required /></label>
+            {contractMessage && <p className="login__error" role="alert">{contractMessage}</p>}
             <button className="contestant__button" type="submit"><span>Firma e inizia il gioco</span><span>→</span></button>
           </form>
           <button className="admin-button" type="button" onClick={logout}>Esci</button>

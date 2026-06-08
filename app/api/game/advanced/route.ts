@@ -65,12 +65,29 @@ export async function POST(request: Request) {
     const signer = String(body.signer ?? "").trim();
     if (!signer) return NextResponse.json({ error: "Firma richiesta" }, { status: 400 });
     const now = new Date();
-    const { data, error } = await supabaseServer.rpc("sign_hot_money_contract", {
-      p_signer: signer,
-      p_signed_at: now.toISOString(),
-      p_next_day_at: nextDayAtFromSignature(now),
-    });
-    return NextResponse.json(error ? { error: error.message } : { data }, { status: error ? 500 : 200 });
+    const nowIso = now.toISOString();
+    const { data, error } = await supabaseServer
+      .from("game_state")
+      .update({
+        contract_signed: true,
+        contract_signed_at: nowIso,
+        contract_signer: signer,
+        game_started_at: nowIso,
+        next_day_at: nextDayAtFromSignature(now),
+        current_day: 1,
+        updated_at: nowIso,
+      })
+      .eq("id", 1)
+      .select(
+        "current_day, prize_pool, director_orgasms, contestant_orgasms, notes, updated_at, contract_signed, contract_signed_at, contract_signer, game_completed, completed_at",
+      )
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "Firma non salvata" }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
   }
 
   if (body.action === "change_prize" && role === "director") {
