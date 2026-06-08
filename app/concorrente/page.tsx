@@ -4,8 +4,10 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import PushNotifications from "@/components/push-notifications";
 import {
   chooseTemptation,
+  chooseExtraTemptation,
   formatCurrency,
   loadRemoteDailyChallenges,
+  loadAdvancedGameData,
   loadRemoteGameState,
   signContract,
   subscribeToRemoteDailyChallenges,
@@ -32,36 +34,44 @@ export default function ConcorrentePage() {
   const temptationChoice = game.temptationChoices[game.currentDay - 1];
 
   useEffect(() => {
-    setAuthorized(window.localStorage.getItem("hot-money-contestant-access") === "true");
+    setAuthorized(window.localStorage.getItem("hot-money-contestant-access") === "server");
   }, []);
 
   useEffect(() => {
     if (!authorized) return;
     void loadRemoteGameState();
     void loadRemoteDailyChallenges();
+    void loadAdvancedGameData();
+    const advancedInterval = window.setInterval(() => void loadAdvancedGameData(), 15000);
     const unsubscribeGameState = subscribeToRemoteGameState();
     const unsubscribeChallenges = subscribeToRemoteDailyChallenges();
     return () => {
       unsubscribeGameState();
       unsubscribeChallenges();
+      window.clearInterval(advancedInterval);
     };
   }, [authorized]);
 
-  function handleAccess(event: FormEvent<HTMLFormElement>) {
+  async function handleAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const password = String(new FormData(event.currentTarget).get("password") ?? "");
 
-    if (password !== "alice1990") {
+    const response = await fetch("/api/session", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "contestant", password }),
+    });
+    if (!response.ok) {
       setAccessError("Password non valida");
       return;
     }
 
-    window.localStorage.setItem("hot-money-contestant-access", "true");
+    window.localStorage.setItem("hot-money-contestant-access", "server");
     setAccessError("");
     setAuthorized(true);
   }
 
-  function logout() {
+  async function logout() {
+    await fetch("/api/session", { method: "DELETE" });
     window.localStorage.removeItem("hot-money-contestant-access");
     setAuthorized(false);
   }
@@ -219,6 +229,20 @@ export default function ConcorrentePage() {
           {temptationChoice && <p className="temptation-status" role="status">Tentazione già {temptationChoice === "accepted" ? "accettata" : "rifiutata"}</p>}
         </section>
 
+        {game.extraTemptations.filter((item) => item.day_number === game.currentDay).map((item) => (
+          <section className="contestant-card contestant-temptation" key={item.id}>
+            <div className="contestant-card__heading"><p>Tentazione Extra</p><span>◆</span></div>
+            <h2>{item.title}</h2>
+            <p className="contestant-mission__copy">{item.description}</p>
+            <div className="contestant-mission__reward"><span>Costo</span><strong>{formatCurrency(item.cost)}</strong></div>
+            <div className="temptation-actions">
+              <button className="contestant__button" disabled={item.choice !== null} onClick={() => void chooseExtraTemptation(item.id, "accepted")}><span>Accetta</span></button>
+              <button className="contestant__button temptation-actions__reject" disabled={item.choice !== null} onClick={() => void chooseExtraTemptation(item.id, "rejected")}><span>Rifiuta</span></button>
+            </div>
+            {item.choice && <p className="temptation-status">Tentazione {item.choice === "accepted" ? "accettata" : "rifiutata"}</p>}
+          </section>
+        ))}
+
         <section className="contestant-card contestant-prize">
           <div><p>Montepremi attuale</p><strong>{formatCurrency(game.prizePool)}</strong></div>
           <span className="contestant-prize__diamond" aria-hidden="true" />
@@ -241,6 +265,17 @@ export default function ConcorrentePage() {
             {message && <p className="evidence-message" role="status">{message}</p>}
             <button className="contestant__button" type="submit"><span>Invia prova</span><span>→</span></button>
           </form>
+        </section>
+
+        <section className="contestant-card">
+          <div className="contestant-card__heading"><p>Le mie prove</p><span>◆</span></div>
+          {game.remoteEvidence.filter((proof) => proof.day_number <= game.currentDay).map((proof) => (
+            <div className="evidence-preview" key={proof.id}>
+              <p className="contestant-mission__day">Giorno {proof.day_number} · {proof.status}</p>
+              {proof.photo_url && <img src={proof.photo_url} alt={`Prova Giorno ${proof.day_number}`} />}
+            </div>
+          ))}
+          {game.remoteEvidence.length === 0 && <p className="contestant-mission__copy">Nessuna prova inviata.</p>}
         </section>
       </div>
     </main>

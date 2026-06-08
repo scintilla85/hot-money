@@ -5,9 +5,15 @@ import { formatCurrency, useGameStore } from "@/lib/game-store";
 
 export default function FinalePage() {
   const game = useGameStore();
-  const approvedEvidence = game.evidence.filter((item) => item.status === "approved").length;
-  const acceptedTemptations = game.temptationChoices.filter((choice) => choice === "accepted").length;
-  const rejectedTemptations = game.temptationChoices.filter((choice) => choice === "rejected").length;
+  const approvedEvidence = game.remoteEvidence.length
+    ? game.remoteEvidence.filter((item) => item.status === "approved").length
+    : game.evidence.filter((item) => item.status === "approved").length;
+  const acceptedTemptations =
+    game.temptationChoices.filter((choice) => choice === "accepted").length +
+    game.extraTemptations.filter((item) => item.choice === "accepted").length;
+  const rejectedTemptations =
+    game.temptationChoices.filter((choice) => choice === "rejected").length +
+    game.extraTemptations.filter((item) => item.choice === "rejected").length;
   const completedDays = game.gameCompleted
     ? 7
     : Math.max(game.currentDay - 1, game.prizePoolHistory.filter((value) => value !== null).length);
@@ -41,6 +47,7 @@ export default function FinalePage() {
         <Link className="contestant__button final-report" href="/report">
           <span>Visualizza report</span><span aria-hidden="true">→</span>
         </Link>
+        <p className="final-card__complete">Hai resistito alle tentazioni. Il montepremi rimasto è la tua vittoria.</p>
       </section>
     </main>
   );

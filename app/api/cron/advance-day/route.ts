@@ -94,35 +94,13 @@ async function handleCron(request: Request) {
     return NextResponse.json({ ok: true, advanced: false, reason: "Not 06:00 Europe/Rome" });
   }
 
-  const { data, error } = await supabaseServer
-    .from("game_state")
-    .select("current_day")
-    .eq("id", 1)
-    .limit(1)
-    .returns<GameStateRow[]>();
-
-  if (error || !data?.[0]) {
-    return NextResponse.json({ error: error?.message ?? "game_state id=1 not found" }, { status: 500 });
-  }
-
-  const currentDay = data[0].current_day;
-  if (currentDay >= 7) {
-    return NextResponse.json({ ok: true, advanced: false, currentDay });
-  }
-
-  const nextDay = currentDay + 1;
-  const { error: updateError } = await supabaseServer
-    .from("game_state")
-    .update({ current_day: nextDay, updated_at: new Date().toISOString() })
-    .eq("id", 1);
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
-  }
-
-  await sendDayChangedNotifications(nextDay);
-
-  return NextResponse.json({ ok: true, advanced: true, currentDay: nextDay });
+  const { data: before } = await supabaseServer.from("game_state").select("current_day").eq("id", 1).single<GameStateRow>();
+  const { data, error } = await supabaseServer.rpc("advance_hot_money_day", { p_now: new Date().toISOString() });
+  if (error || !data) return NextResponse.json({ error: error?.message ?? "Advance failed" }, { status: 500 });
+  const nextDay = Number((data as GameStateRow).current_day);
+  const advanced = nextDay > Number(before?.current_day ?? nextDay);
+  if (advanced) await sendDayChangedNotifications(nextDay);
+  return NextResponse.json({ ok: true, advanced, currentDay: nextDay });
 }
 
 export function GET(request: Request) {

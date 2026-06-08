@@ -5,15 +5,19 @@ import { useRouter } from "next/navigation";
 import PushNotifications from "@/components/push-notifications";
 import {
   completeGame,
+  createExtraTemptation,
   dayThemes,
+  changePrizePoolAtomic,
   formatCurrency,
   formatDateTime,
   loadRemoteDailyChallenges,
+  loadAdvancedGameData,
   loadRemoteGameState,
   resetContract,
   resetEvidence,
   resetGame,
   reviewEvidence,
+  reviewRemoteEvidence,
   subscribeToRemoteDailyChallenges,
   subscribeToRemoteGameState,
   updateGameState,
@@ -30,36 +34,44 @@ export default function DirettorePage() {
   const [resetSuccess, setResetSuccess] = useState(false);
 
   useEffect(() => {
-    setAuthorized(window.localStorage.getItem("hot-money-director-access") === "true");
+    setAuthorized(window.localStorage.getItem("hot-money-director-access") === "server");
   }, []);
 
   useEffect(() => {
     if (!authorized) return;
     void loadRemoteGameState();
     void loadRemoteDailyChallenges();
+    void loadAdvancedGameData();
+    const advancedInterval = window.setInterval(() => void loadAdvancedGameData(), 15000);
     const unsubscribeGameState = subscribeToRemoteGameState();
     const unsubscribeChallenges = subscribeToRemoteDailyChallenges();
     return () => {
       unsubscribeGameState();
       unsubscribeChallenges();
+      window.clearInterval(advancedInterval);
     };
   }, [authorized]);
 
-  function handleAccess(event: FormEvent<HTMLFormElement>) {
+  async function handleAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const password = String(new FormData(event.currentTarget).get("password") ?? "");
 
-    if (password !== "andrea198585") {
+    const response = await fetch("/api/session", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "director", password }),
+    });
+    if (!response.ok) {
       setAccessError("Password non valida");
       return;
     }
 
-    window.localStorage.setItem("hot-money-director-access", "true");
+    window.localStorage.setItem("hot-money-director-access", "server");
     setAccessError("");
     setAuthorized(true);
   }
 
-  function logout() {
+  async function logout() {
+    await fetch("/api/session", { method: "DELETE" });
     window.localStorage.removeItem("hot-money-director-access");
     setAuthorized(false);
   }
@@ -102,12 +114,23 @@ export default function DirettorePage() {
     });
   }
 
-  function changePrizePool(direction: 1 | -1) {
+  async function changePrizePool(direction: 1 | -1) {
     const amount = Number(prizeChange);
     if (amount > 0) {
-      updateGameState({ prizePool: Math.max(0, game.prizePool + amount * direction) });
+      await changePrizePoolAtomic(amount * direction, direction < 0 ? "Riduzione Direttore" : "Aumento Direttore");
       setPrizeChange("");
     }
+  }
+
+  async function saveExtraTemptation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    await createExtraTemptation(
+      String(data.get("title") ?? ""),
+      String(data.get("description") ?? ""),
+      Number(data.get("cost")) || 0,
+    );
+    event.currentTarget.reset();
   }
 
   function saveRules(event: FormEvent<HTMLFormElement>) {
@@ -226,6 +249,16 @@ export default function DirettorePage() {
             </form>
           </section>
 
+          <section className="admin-card">
+            <div className="admin-card__header"><div><p>Offerta immediata</p><h2>Tentazione Extra</h2></div></div>
+            <form className="admin-form" onSubmit={saveExtraTemptation}>
+              <label><span>Titolo</span><input name="title" required /></label>
+              <label><span>Descrizione</span><textarea name="description" required /></label>
+              <label><span>Costo</span><input name="cost" type="number" min="0" required /></label>
+              <button className="admin-button admin-button--primary" type="submit">Crea tentazione extra</button>
+            </form>
+          </section>
+
           <section id="prove" className="admin-card admin-card--wide">
             <div className="admin-card__header"><div><p>Giorno {game.currentDay} · {game.dayTitle}</p><h2>Prove ricevute</h2></div><span className="admin-badge">{game.evidence.filter((item) => item.day === game.currentDay).length} foto</span></div>
             <div className="admin-evidence">
@@ -269,6 +302,44 @@ export default function DirettorePage() {
                   </dl>
                 </article>
               ))}
+            </div>
+          </section>
+
+          <section className="admin-card admin-card--wide">
+            <div className="admin-card__header"><div><p>Movimenti montepremi</p><h2>Storico economico</h2></div></div>
+            <div className="history-days">
+              {game.prizeTransactions.map((item) => (
+                <article className="history-day" key={item.id}>
+                  <div className="history-day__header"><span>Giorno {item.day_number}</span><strong>{item.reason}</strong></div>
+                  <dl>
+                    <div><dt>Variazione</dt><dd>{formatCurrency(item.amount)}</dd></div>
+                    <div><dt>Saldo prima</dt><dd>{formatCurrency(item.balance_before)}</dd></div>
+                    <div><dt>Saldo dopo</dt><dd>{formatCurrency(item.balance_after)}</dd></div>
+                    <div><dt>Data e ora</dt><dd>{formatDateTime(item.created_at)}</dd></div>
+                  </dl>
+                </article>
+              ))}
+              {game.prizeTransactions.length === 0 && <p className="admin-empty">Nessun movimento registrato.</p>}
+            </div>
+          </section>
+
+          <section className="admin-card admin-card--wide">
+            <div className="admin-card__header"><div><p>Prove private</p><h2>Archivio foto Giorni 1-7</h2></div></div>
+            <div className="history-days">
+              {dayThemes.map((theme, index) => {
+                const proof = game.remoteEvidence.find((item) => item.day_number === index + 1);
+                return (
+                  <article className="history-day" key={theme}>
+                    <div className="history-day__header"><span>Giorno {index + 1}</span><strong>{theme}</strong></div>
+                    <p className="admin-empty">{proof ? proof.status : "Non inviata"}</p>
+                    {proof?.photo_url && <div className="admin-evidence__preview"><img src={proof.photo_url} alt={`Prova Giorno ${index + 1}`} /></div>}
+                    {proof?.status === "pending" && <div className="admin-evidence__actions">
+                      <button className="admin-button admin-button--approve" onClick={() => void reviewRemoteEvidence(proof.id, "approved")}>Approva</button>
+                      <button className="admin-button" onClick={() => void reviewRemoteEvidence(proof.id, "rejected")}>Rifiuta</button>
+                    </div>}
+                  </article>
+                );
+              })}
             </div>
           </section>
 
