@@ -35,7 +35,32 @@ export default function ConcorrentePage() {
   const temptationChoice = game.temptationChoices[game.currentDay - 1];
 
   useEffect(() => {
-    setAuthorized(window.localStorage.getItem("hot-money-contestant-access") === "server");
+    async function verifySession() {
+      if (window.localStorage.getItem("hot-money-contestant-access") !== "server") {
+        setAuthorized(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+        const session = (await response.json()) as { role?: string };
+        const isContestant = response.ok && session.role === "contestant";
+
+        if (!isContestant) {
+          window.localStorage.removeItem("hot-money-contestant-access");
+        }
+        setAuthorized(isContestant);
+      } catch {
+        window.localStorage.removeItem("hot-money-contestant-access");
+        setAuthorized(false);
+      }
+    }
+
+    void verifySession();
   }, []);
 
   useEffect(() => {
@@ -58,7 +83,9 @@ export default function ConcorrentePage() {
     const password = String(new FormData(event.currentTarget).get("password") ?? "");
 
     const response = await fetch("/api/session", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: "contestant", password }),
     });
     if (!response.ok) {
@@ -72,7 +99,7 @@ export default function ConcorrentePage() {
   }
 
   async function logout() {
-    await fetch("/api/session", { method: "DELETE" });
+    await fetch("/api/session", { method: "DELETE", credentials: "include" });
     window.localStorage.removeItem("hot-money-contestant-access");
     setAuthorized(false);
   }

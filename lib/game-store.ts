@@ -670,6 +670,7 @@ export async function signContract(signer: string) {
 
   const response = await fetch("/api/game/advanced", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "sign_contract", signer: signer.trim() }),
   });

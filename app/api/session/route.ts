@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { clearServerRole, setServerRole, type AppRole } from "@/lib/server-auth";
+import { clearServerRole, getServerRole, setServerRole, type AppRole } from "@/lib/server-auth";
+
+export async function GET() {
+  const role = await getServerRole();
+  return NextResponse.json({ role });
+}
 
 export async function POST(request: Request) {
   const { role, password } = (await request.json()) as { role?: AppRole; password?: string };
