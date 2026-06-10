@@ -416,7 +416,10 @@ async function advancedAction(body: Record<string, unknown>) {
     result = { error: responseText || `Errore server (${response.status})` };
   }
 
-  if (!response.ok) throw new Error(result.error ?? "Operazione non riuscita");
+  if (!response.ok) {
+    const reference = result.requestId ? ` [${result.requestId}]` : "";
+    throw new Error(`${result.error ?? "Operazione non riuscita"}${reference}`);
+  }
   await Promise.all([loadRemoteGameState(), loadAdvancedGameData()]);
 }
 
