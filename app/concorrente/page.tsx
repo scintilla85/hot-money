@@ -24,7 +24,8 @@ export default function ConcorrentePage() {
   const [accessError, setAccessError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const [media, setMedia] = useState<{
-    dataUrl: string;
+    file: File;
+    previewUrl: string;
     fileName: string;
   } | null>(null);
   const [message, setMessage] = useState("");
@@ -77,6 +78,12 @@ export default function ConcorrentePage() {
       window.clearInterval(advancedInterval);
     };
   }, [authorized]);
+
+  useEffect(() => {
+    return () => {
+      if (media) URL.revokeObjectURL(media.previewUrl);
+    };
+  }, [media]);
 
   async function handleAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,17 +142,15 @@ export default function ConcorrentePage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setMedia({
-        dataUrl: String(reader.result),
-        fileName: file.name,
-      });
-    };
-    reader.readAsDataURL(file);
+    if (media) URL.revokeObjectURL(media.previewUrl);
+    setMedia({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      fileName: file.name,
+    });
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!media) {
       setMessage("Seleziona una foto o un video.");
@@ -153,19 +158,13 @@ export default function ConcorrentePage() {
     }
 
     try {
-      submitEvidence({
-        day: game.currentDay,
-        contestantId: contestant.id,
-        contestantName: contestant.name,
-        missionTitle: game.missionTitle,
-        photoDataUrl: media.dataUrl,
-        fileName: media.fileName,
-      });
+      await submitEvidence(media.file, game.currentDay, game.missionTitle);
       formRef.current?.reset();
+      URL.revokeObjectURL(media.previewUrl);
       setMedia(null);
       setMessage("Prova inviata. In attesa di approvazione.");
-    } catch {
-      setMessage("Spazio locale insufficiente. Prova con un file più piccolo.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Invio prova non riuscito.");
     }
   }
 
@@ -295,7 +294,7 @@ export default function ConcorrentePage() {
             </label>
             {media && (
               <div className="evidence-preview">
-                <img src={media.dataUrl} alt="Anteprima prova selezionata" />
+                <img src={media.previewUrl} alt="Anteprima prova selezionata" />
               </div>
             )}
             {message && <p className="evidence-message" role="status">{message}</p>}

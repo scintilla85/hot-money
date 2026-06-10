@@ -12,18 +12,6 @@ export type Contestant = {
 export type EvidenceStatus = "pending" | "approved" | "rejected";
 export type TemptationChoice = "accepted" | "rejected" | null;
 
-export type Evidence = {
-  id: string;
-  day: number;
-  contestantId: string;
-  contestantName: string;
-  missionTitle: string;
-  photoDataUrl: string;
-  fileName: string;
-  submittedAt: string;
-  status: EvidenceStatus;
-};
-
 export type GameDay = {
   title: string;
   missionTitle: string;
@@ -80,7 +68,6 @@ export type GameState = {
   temptationChoices: TemptationChoice[];
   days: GameDay[];
   contestant: Contestant;
-  evidence: Evidence[];
   rules: string;
   prizePoolHistory: Array<number | null>;
   contractSigned: boolean;
@@ -186,7 +173,6 @@ const initialState: GameState = {
   temptationChoices: Array<TemptationChoice>(7).fill(null),
   days: officialDays,
   contestant: { id: "alice", name: "ALICE", username: "concorrente" },
-  evidence: [],
   rules: initialRules,
   prizePoolHistory: Array<number | null>(7).fill(null),
   contractSigned: false,
@@ -230,23 +216,21 @@ type RemoteDailyChallenge = {
 };
 
 function normalizeState(value: Partial<GameState>): GameState {
-  const currentDay = Math.min(7, Math.max(1, Number(value.currentDay) || initialState.currentDay));
-  const days = value.days ?? officialDays;
+  const { evidence: _legacyEvidence, ...cleanValue } = value as Partial<GameState> & { evidence?: unknown };
+  const currentDay = Math.min(7, Math.max(1, Number(cleanValue.currentDay) || initialState.currentDay));
+  const days = cleanValue.days ?? officialDays;
   const activeDay = days[currentDay - 1] ?? officialDays[currentDay - 1];
 
   return {
     ...initialState,
-    ...value,
+    ...cleanValue,
     ...activeDay,
     dayTitle: activeDay.title,
     temptationDescription: activeDay.temptationDescription ?? "",
     days,
-    temptationChoices: value.temptationChoices ?? initialState.temptationChoices,
+    temptationChoices: cleanValue.temptationChoices ?? initialState.temptationChoices,
     contestant: initialState.contestant,
-    evidence: (value.evidence ?? initialState.evidence).filter(
-      (item) => item.photoDataUrl && item.day >= 1 && item.day <= 7,
-    ),
-    prizePoolHistory: value.prizePoolHistory ?? initialState.prizePoolHistory,
+    prizePoolHistory: cleanValue.prizePoolHistory ?? initialState.prizePoolHistory,
     currentDay,
   };
 }
@@ -506,8 +490,12 @@ function readStoredState() {
 
   try {
     const storedState = window.localStorage.getItem(STORAGE_KEY);
-    if (storedState) state = normalizeState(JSON.parse(storedState));
+    if (storedState) {
+      state = normalizeState(JSON.parse(storedState));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
   } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
     state = initialState;
   }
 }
@@ -625,43 +613,49 @@ export function chooseTemptation(choice: Exclude<TemptationChoice, null>) {
   });
 }
 
-export function submitEvidence(
-  evidence: Omit<Evidence, "id" | "submittedAt" | "status">,
-) {
-  readStoredState();
-  const submission: Evidence = {
-    ...evidence,
-    id: crypto.randomUUID(),
-    submittedAt: new Date().toISOString(),
-    status: "pending",
-  };
-  state = { ...state, evidence: [submission, ...state.evidence] };
-  persist();
-  void advancedAction({
-    action: "submit_evidence",
-    dayNumber: evidence.day,
-    missionTitle: evidence.missionTitle,
-    dataUrl: evidence.photoDataUrl,
-    fileName: evidence.fileName,
+export async function submitEvidence(photo: File, dayNumber: number, missionTitle: string) {
+  if (!supabase) throw new Error("Supabase non disponibile");
+
+  const prepareResponse = await fetch("/api/evidence", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "prepare",
+      dayNumber,
+      fileName: photo.name,
+      fileType: photo.type,
+      fileSize: photo.size,
+    }),
   });
-}
-
-export function reviewEvidence(id: string, status: Exclude<EvidenceStatus, "pending">) {
-  readStoredState();
-  const submission = state.evidence.find((item) => item.id === id);
-  if (!submission || submission.status !== "pending") return;
-
-  state = {
-    ...state,
-    evidence: state.evidence.map((item) => (item.id === id ? { ...item, status } : item)),
+  const prepared = (await prepareResponse.json()) as {
+    data?: { path: string; token: string };
+    error?: string;
   };
-  persist();
-}
+  if (!prepareResponse.ok || !prepared.data) {
+    throw new Error(prepared.error ?? "Preparazione upload non riuscita");
+  }
 
-export function resetEvidence(id: string) {
-  readStoredState();
-  state = { ...state, evidence: state.evidence.filter((item) => item.id !== id) };
-  persist();
+  const upload = await supabase.storage
+    .from("evidence-proofs")
+    .uploadToSignedUrl(prepared.data.path, prepared.data.token, photo, { contentType: photo.type });
+  if (upload.error) throw new Error(upload.error.message);
+
+  const finalizeResponse = await fetch("/api/evidence", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "finalize",
+      dayNumber,
+      missionTitle,
+      storagePath: prepared.data.path,
+      fileName: photo.name,
+    }),
+  });
+  const finalized = (await finalizeResponse.json()) as { error?: string };
+  if (!finalizeResponse.ok) throw new Error(finalized.error ?? "Registrazione prova non riuscita");
+  await loadAdvancedGameData();
 }
 
 export async function signContract(signer: string) {
@@ -729,7 +723,6 @@ export function resetGame() {
     ...initialState,
     temptationChoices: Array<TemptationChoice>(7).fill(null),
     days: officialDays.map((day) => ({ ...day })),
-    evidence: [],
     rules: savedRules,
     prizePoolHistory: Array<number | null>(7).fill(null),
   };

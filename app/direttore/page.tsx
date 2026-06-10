@@ -14,9 +14,7 @@ import {
   loadAdvancedGameData,
   loadRemoteGameState,
   resetContract,
-  resetEvidence,
   resetGame,
-  reviewEvidence,
   reviewRemoteEvidence,
   subscribeToRemoteDailyChallenges,
   subscribeToRemoteGameState,
@@ -77,7 +75,7 @@ export default function DirettorePage() {
   }
 
   function getEvidenceStatus(day: number) {
-    const submission = game.evidence.find((item) => item.day === day);
+    const submission = game.remoteEvidence.find((item) => item.day_number === day);
     if (!submission) return "Non inviata";
     if (submission.status === "approved") return "Approvata";
     if (submission.status === "rejected") return "Rifiutata";
@@ -257,30 +255,6 @@ export default function DirettorePage() {
               <label><span>Costo</span><input name="cost" type="number" min="0" required /></label>
               <button className="admin-button admin-button--primary" type="submit">Crea tentazione extra</button>
             </form>
-          </section>
-
-          <section id="prove" className="admin-card admin-card--wide">
-            <div className="admin-card__header"><div><p>Giorno {game.currentDay} · {game.dayTitle}</p><h2>Prove ricevute</h2></div><span className="admin-badge">{game.evidence.filter((item) => item.day === game.currentDay).length} foto</span></div>
-            <div className="admin-evidence">
-              {game.evidence.filter((item) => item.day === game.currentDay).length === 0 && <p className="admin-empty">Nessuna foto ricevuta per questo giorno.</p>}
-              {game.evidence.filter((item) => item.day === game.currentDay).map((submission) => (
-                <article className="admin-evidence__item" key={submission.id}>
-                  <div className="admin-evidence__content">
-                    <strong>{submission.contestantName}</strong>
-                    <span>{submission.missionTitle} · {formatDateTime(submission.submittedAt)}</span>
-                    <div className="admin-evidence__preview"><img src={submission.photoDataUrl} alt={`Prova di ${submission.contestantName} per il giorno ${submission.day}`} /></div>
-                  </div>
-                  <div className="admin-evidence__review">
-                    <span className={`admin-status admin-status--${submission.status}`}>{submission.status === "pending" ? "In attesa" : submission.status === "approved" ? "Approvata" : "Rifiutata"}</span>
-                    <div className="admin-evidence__actions">
-                      <button className="admin-button admin-button--approve" type="button" disabled={submission.status !== "pending"} onClick={() => reviewEvidence(submission.id, "approved")}>Approva</button>
-                      <button className="admin-button" type="button" disabled={submission.status !== "pending"} onClick={() => reviewEvidence(submission.id, "rejected")}>Rifiuta</button>
-                      <button className="admin-button" type="button" onClick={() => resetEvidence(submission.id)}>Reset</button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
           </section>
 
           <section id="storico" className="admin-card admin-card--wide">

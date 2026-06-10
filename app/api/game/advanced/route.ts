@@ -4,8 +4,6 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 
-const MAX_EVIDENCE_FILE_SIZE = 10 * 1024 * 1024;
-
 function nextDayAtFromSignature(signedAt: Date) {
   const minimum = signedAt.getTime() + 24 * 60 * 60 * 1000;
   const formatter = new Intl.DateTimeFormat("en-GB", {
@@ -200,26 +198,6 @@ export async function POST(request: Request) {
       p_idempotency_key: String(body.idempotencyKey),
     });
     return NextResponse.json(error ? { error: error.message } : { data }, { status: error ? 400 : 200 });
-  }
-
-  if (body.action === "submit_evidence" && role === "contestant") {
-    const dataUrl = String(body.dataUrl);
-    const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
-    if (!match) return NextResponse.json({ error: "Foto non valida" }, { status: 400 });
-    const photoBuffer = Buffer.from(match[2], "base64");
-    if (photoBuffer.byteLength > MAX_EVIDENCE_FILE_SIZE) {
-      return NextResponse.json({ error: "Il file supera il limite di 10 MB." }, { status: 413 });
-    }
-    const path = `alice/day-${Number(body.dayNumber)}/${crypto.randomUUID()}`;
-    const upload = await supabaseServer.storage.from("evidence-proofs").upload(path, photoBuffer, {
-      contentType: match[1],
-    });
-    if (upload.error) return NextResponse.json({ error: upload.error.message }, { status: 500 });
-    const { error } = await supabaseServer.from("evidence_proofs").insert({
-      day_number: Number(body.dayNumber), mission_title: String(body.missionTitle),
-      storage_path: path, file_name: String(body.fileName),
-    });
-    return NextResponse.json(error ? { error: error.message } : { ok: true }, { status: error ? 500 : 200 });
   }
 
   if (body.action === "review_evidence" && role === "director") {

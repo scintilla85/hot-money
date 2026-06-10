@@ -6,7 +6,7 @@ export default function ReportPage() {
   const game = useGameStore();
 
   function evidenceStatus(day: number) {
-    const evidence = game.evidence.find((item) => item.day === day);
+    const evidence = game.remoteEvidence.find((item) => item.day_number === day);
     if (!evidence) return "Non inviata";
     if (evidence.status === "approved") return "Approvata";
     if (evidence.status === "rejected") return "Rifiutata";

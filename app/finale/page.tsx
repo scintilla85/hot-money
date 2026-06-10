@@ -5,9 +5,7 @@ import { formatCurrency, useGameStore } from "@/lib/game-store";
 
 export default function FinalePage() {
   const game = useGameStore();
-  const approvedEvidence = game.remoteEvidence.length
-    ? game.remoteEvidence.filter((item) => item.status === "approved").length
-    : game.evidence.filter((item) => item.status === "approved").length;
+  const approvedEvidence = game.remoteEvidence.filter((item) => item.status === "approved").length;
   const acceptedTemptations =
     game.temptationChoices.filter((choice) => choice === "accepted").length +
     game.extraTemptations.filter((item) => item.choice === "accepted").length;
