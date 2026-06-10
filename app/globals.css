@@ -261,6 +261,14 @@ a {
   transform: translateY(1px);
 }
 
+.hero__access {
+  gap: 1.25rem;
+}
+
+.hero__access .hero__button {
+  margin-top: 0;
+}
+
 .login-page {
   position: relative;
   display: grid;

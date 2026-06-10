@@ -10,30 +10,21 @@ export default function HomePage() {
         <span className="home__corner home__corner--bottom-right" />
       </div>
 
-      <section className="hero" aria-labelledby="home-title">
-        <div className="hero__edition">
-          <span />
-          <p>Black Edition</p>
-          <span />
-        </div>
-
-        <h1 id="home-title" className="hero__title">
-          Hot Money
-        </h1>
-
-        <div className="hero__diamond" aria-hidden="true" />
-
-        <p className="hero__copy">
-          7 giorni di sfide, tentazioni e strategia.
-        </p>
-
-        <Link className="hero__button" href="/login">
-          <span>Entra nel gioco</span>
+      <nav className="hero hero__access" aria-label="Seleziona il ruolo">
+        <Link className="hero__button" href="/direttore">
+          <span>Accesso Direttore</span>
           <span className="hero__button-arrow" aria-hidden="true">
-            →
+            &rarr;
           </span>
         </Link>
-      </section>
+
+        <Link className="hero__button" href="/concorrente">
+          <span>Accesso Concorrente</span>
+          <span className="hero__button-arrow" aria-hidden="true">
+            &rarr;
+          </span>
+        </Link>
+      </nav>
     </main>
   );
 }
