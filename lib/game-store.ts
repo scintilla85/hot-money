@@ -403,10 +403,19 @@ export async function loadAdvancedGameData() {
 async function advancedAction(body: Record<string, unknown>) {
   const response = await fetch("/api/game/advanced", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const result = (await response.json()) as { error?: string };
+  const responseText = await response.text();
+  let result: { error?: string; requestId?: string };
+
+  try {
+    result = JSON.parse(responseText) as typeof result;
+  } catch {
+    result = { error: responseText || `Errore server (${response.status})` };
+  }
+
   if (!response.ok) throw new Error(result.error ?? "Operazione non riuscita");
   await Promise.all([loadRemoteGameState(), loadAdvancedGameData()]);
 }
@@ -762,7 +771,8 @@ export async function resetGame() {
     prizePoolHistory: Array<number | null>(7).fill(null),
   };
   persist();
-  await reloadRemoteGame();
+  const remoteState = await reloadRemoteGame();
+  if (!remoteState) throw new Error("Impossibile ricaricare lo stato remoto dopo il reset");
 }
 
 export function useGameStore() {

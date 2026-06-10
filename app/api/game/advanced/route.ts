@@ -215,25 +215,50 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "reset_advanced" && role === "director") {
+    console.info("[reset_game] Starting reset", { requestId, role });
     const { data: evidencePaths, error: evidencePathsError } = await supabaseServer
       .from("evidence_proofs")
       .select("storage_path");
     if (evidencePathsError) {
-      return NextResponse.json({ error: evidencePathsError.message }, { status: 500 });
+      console.error("[reset_game] Unable to read evidence paths", {
+        requestId,
+        message: evidencePathsError.message,
+        code: evidencePathsError.code,
+      });
     }
     const { data, error } = await supabaseServer.rpc("reset_hot_money_game");
     if (error || !data) {
-      return NextResponse.json({ error: error?.message ?? "Reset non riuscito" }, { status: 500 });
+      console.error("[reset_game] RPC failed", {
+        requestId,
+        message: error?.message ?? "No data returned",
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      });
+      const missingRpc = error?.code === "PGRST202";
+      return NextResponse.json(
+        {
+          error: missingRpc
+            ? "La funzione reset_hot_money_game non esiste su Supabase. Esegui la migrazione 009."
+            : error?.message ?? "Reset non riuscito",
+          requestId,
+        },
+        { status: 500 },
+      );
     }
-    if (evidencePaths?.length) {
+    if (!evidencePathsError && evidencePaths?.length) {
       const removal = await supabaseServer.storage
         .from("evidence-proofs")
         .remove(evidencePaths.map((item) => item.storage_path));
       if (removal.error) {
-        return NextResponse.json({ error: removal.error.message }, { status: 500 });
+        console.error("[reset_game] Storage cleanup failed after database reset", {
+          requestId,
+          message: removal.error.message,
+        });
       }
     }
-    return NextResponse.json({ data });
+    console.info("[reset_game] Reset completed", { requestId });
+    return NextResponse.json({ data, requestId });
   }
 
   return NextResponse.json({ error: "Azione non valida" }, { status: 400 });

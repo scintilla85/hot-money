@@ -30,6 +30,8 @@ export default function DirettorePage() {
   const [prizeChange, setPrizeChange] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   useEffect(() => {
     setAuthorized(window.localStorage.getItem("hot-money-director-access") === "server");
@@ -143,6 +145,10 @@ export default function DirettorePage() {
   }
 
   async function confirmGameReset() {
+    if (resetting) return;
+    setResetting(true);
+    setResetError("");
+
     try {
       await resetGame();
       setShowResetConfirm(false);
@@ -152,6 +158,9 @@ export default function DirettorePage() {
       window.setTimeout(() => setResetSuccess(false), 4000);
     } catch (error) {
       console.error("Reset gioco non riuscito", error);
+      setResetError(error instanceof Error ? error.message : "Reset gioco non riuscito");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -190,7 +199,7 @@ export default function DirettorePage() {
             <span className="admin__role">Direttore</span>
             <PushNotifications role="director" className="admin-button" />
             <button className="admin-button" type="button" onClick={logout}>Esci</button>
-            <button className="admin-button admin-button--reset" type="button" onClick={() => setShowResetConfirm(true)}>
+            <button className="admin-button admin-button--reset" type="button" onClick={() => { setResetError(""); setShowResetConfirm(true); }}>
               &#8635; Reset gioco
             </button>
           </div>
@@ -360,9 +369,12 @@ export default function DirettorePage() {
             <p>Reset completo</p>
             <h2 id="reset-title">Sei sicuro di voler resettare HOT MONEY?</h2>
             <span>Tutti i dati del gioco corrente verranno cancellati.</span>
+            {resetError && <p className="login__error" role="alert">{resetError}</p>}
             <div className="admin-modal__actions">
-              <button className="admin-button" type="button" onClick={() => setShowResetConfirm(false)}>Annulla</button>
-              <button className="admin-button admin-button--reset" type="button" onClick={confirmGameReset}>Conferma reset</button>
+              <button className="admin-button" type="button" disabled={resetting} onClick={() => setShowResetConfirm(false)}>Annulla</button>
+              <button className="admin-button admin-button--reset" type="button" disabled={resetting} onClick={confirmGameReset}>
+                {resetting ? "Reset in corso..." : "Conferma reset"}
+              </button>
             </div>
           </section>
         </div>
