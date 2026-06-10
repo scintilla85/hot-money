@@ -9,6 +9,7 @@ import {
   loadRemoteDailyChallenges,
   loadAdvancedGameData,
   loadRemoteGameState,
+  reloadRemoteGame,
   signContract,
   subscribeToRemoteDailyChallenges,
   subscribeToRemoteGameState,
@@ -66,9 +67,8 @@ export default function ConcorrentePage() {
 
   useEffect(() => {
     if (!authorized) return;
-    void loadRemoteGameState();
+    void reloadRemoteGame();
     void loadRemoteDailyChallenges();
-    void loadAdvancedGameData();
     const advancedInterval = window.setInterval(() => void loadAdvancedGameData(), 15000);
     const unsubscribeGameState = subscribeToRemoteGameState();
     const unsubscribeChallenges = subscribeToRemoteDailyChallenges();

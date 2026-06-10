@@ -51,6 +51,12 @@ export type RemoteEvidence = {
   photo_url: string | null;
 };
 
+export type RemoteDailyChoice = {
+  day_number: number;
+  choice: Exclude<TemptationChoice, null>;
+  chosen_at: string;
+};
+
 export type GameState = {
   currentDay: number;
   dayTitle: string;
@@ -372,12 +378,20 @@ export async function loadAdvancedGameData() {
       transactions: PrizeTransaction[];
       temptations: ExtraTemptation[];
       evidence: RemoteEvidence[];
+      dailyChoices: RemoteDailyChoice[];
     };
+    const temptationChoices = Array<TemptationChoice>(7).fill(null);
+    (data.dailyChoices ?? []).forEach((item) => {
+      if (item.day_number >= 1 && item.day_number <= 7) {
+        temptationChoices[item.day_number - 1] = item.choice;
+      }
+    });
     state = normalizeState({
       ...state,
       prizeTransactions: data.transactions,
       extraTemptations: data.temptations,
       remoteEvidence: data.evidence,
+      temptationChoices,
     });
     persist();
     return true;
@@ -419,21 +433,41 @@ export async function reviewRemoteEvidence(id: string, status: Exclude<EvidenceS
 }
 
 function applyRemoteState(data: RemoteGameState) {
-  state = normalizeState({
-    ...state,
+  const remoteState = {
     currentDay: data.current_day,
     prizePool: data.prize_pool,
     directorOrgasms: data.director_orgasms,
     contestantOrgasms: data.contestant_orgasms,
     notes: data.notes ?? "",
     updatedAt: data.updated_at,
-    contractSigned: data.contract_signed ?? state.contractSigned,
-    contractSignedAt: data.contract_signed_at ?? state.contractSignedAt,
-    contractSigner: data.contract_signer ?? state.contractSigner,
-    gameCompleted: data.game_completed ?? state.gameCompleted,
-    completedAt: data.completed_at ?? state.completedAt,
-  });
+    contractSigned: data.contract_signed ?? false,
+    contractSignedAt: data.contract_signed_at ?? null,
+    contractSigner: data.contract_signer ?? "",
+    gameCompleted: data.game_completed ?? false,
+    completedAt: data.completed_at ?? null,
+  };
+
+  state = data.contract_signed === false
+    ? normalizeState({
+        ...initialState,
+        ...remoteState,
+        rules: state.rules,
+        days: state.days,
+        temptationChoices: Array<TemptationChoice>(7).fill(null),
+        prizePoolHistory: Array<number | null>(7).fill(null),
+        prizeTransactions: [],
+        extraTemptations: [],
+        remoteEvidence: [],
+      })
+    : normalizeState({ ...state, ...remoteState });
   persist();
+}
+
+export async function reloadRemoteGame() {
+  const remoteState = await loadRemoteGameState();
+  if (!remoteState) return false;
+  await loadAdvancedGameData();
+  return remoteState;
 }
 
 export function subscribeToRemoteGameState() {
@@ -715,10 +749,11 @@ export function completeGame() {
   void syncToSupabase({ gameCompleted: true, completedAt: state.completedAt });
 }
 
-export function resetGame() {
+export async function resetGame() {
   readStoredState();
   const savedRules = state.rules;
 
+  await advancedAction({ action: "reset_advanced" });
   state = {
     ...initialState,
     temptationChoices: Array<TemptationChoice>(7).fill(null),
@@ -727,19 +762,7 @@ export function resetGame() {
     prizePoolHistory: Array<number | null>(7).fill(null),
   };
   persist();
-  void syncToSupabase({
-    currentDay: state.currentDay,
-    prizePool: state.prizePool,
-    directorOrgasms: state.directorOrgasms,
-    contestantOrgasms: state.contestantOrgasms,
-    notes: state.notes,
-    contractSigned: false,
-    contractSignedAt: null,
-    contractSigner: "",
-    gameCompleted: false,
-    completedAt: null,
-  });
-  void advancedAction({ action: "reset_advanced" });
+  await reloadRemoteGame();
 }
 
 export function useGameStore() {

@@ -142,13 +142,17 @@ export default function DirettorePage() {
     router.push("/finale");
   }
 
-  function confirmGameReset() {
-    resetGame();
-    setShowResetConfirm(false);
-    setResetSuccess(true);
-    setPrizeChange("");
-    router.push("/direttore#giorno");
-    window.setTimeout(() => setResetSuccess(false), 4000);
+  async function confirmGameReset() {
+    try {
+      await resetGame();
+      setShowResetConfirm(false);
+      setResetSuccess(true);
+      setPrizeChange("");
+      router.push("/direttore#giorno");
+      window.setTimeout(() => setResetSuccess(false), 4000);
+    } catch (error) {
+      console.error("Reset gioco non riuscito", error);
+    }
   }
 
   if (!authorized) {

@@ -38,22 +38,29 @@ export async function GET() {
   const currentDay = gameState?.current_day ?? 1;
 
   if (role === "contestant" && !gameState?.contract_signed) {
-    return NextResponse.json({ transactions: [], temptations: [], evidence: [] });
+    return NextResponse.json({ transactions: [], temptations: [], evidence: [], dailyChoices: [] });
   }
 
   const transactionsQuery = supabaseServer.from("prize_transactions").select("*").order("created_at", { ascending: false });
   const temptationsQuery = supabaseServer.from("extra_temptations").select("*").order("created_at", { ascending: false });
   const evidenceQuery = supabaseServer.from("evidence_proofs").select("*").order("submitted_at", { ascending: false });
-  const [{ data: transactions }, { data: temptations }, { data: evidence }] = await Promise.all([
+  const dailyChoicesQuery = supabaseServer.from("daily_temptation_choices").select("day_number, choice, chosen_at").order("day_number");
+  const [{ data: transactions }, { data: temptations }, { data: evidence }, { data: dailyChoices }] = await Promise.all([
     role === "director" ? transactionsQuery : Promise.resolve({ data: [] }),
     role === "director" ? temptationsQuery : temptationsQuery.eq("day_number", currentDay),
     role === "director" ? evidenceQuery : evidenceQuery.lte("day_number", currentDay),
+    dailyChoicesQuery,
   ]);
 
   const evidenceWithUrls = await Promise.all(
     (evidence ?? []).map(async (item) => ({ ...item, photo_url: await signedEvidenceUrl(item.storage_path) })),
   );
-  return NextResponse.json({ transactions: transactions ?? [], temptations: temptations ?? [], evidence: evidenceWithUrls });
+  return NextResponse.json({
+    transactions: transactions ?? [],
+    temptations: temptations ?? [],
+    evidence: evidenceWithUrls,
+    dailyChoices: dailyChoices ?? [],
+  });
 }
 
 export async function POST(request: Request) {
@@ -208,17 +215,25 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "reset_advanced" && role === "director") {
-    const { data: evidencePaths } = await supabaseServer.from("evidence_proofs").select("storage_path");
-    await Promise.all([
-      supabaseServer.from("prize_transactions").delete().gte("id", 0),
-      supabaseServer.from("extra_temptations").delete().not("id", "is", null),
-      supabaseServer.from("daily_temptation_choices").delete().gte("day_number", 1),
-      supabaseServer.from("evidence_proofs").delete().not("id", "is", null),
-    ]);
-    if (evidencePaths?.length) {
-      await supabaseServer.storage.from("evidence-proofs").remove(evidencePaths.map((item) => item.storage_path));
+    const { data: evidencePaths, error: evidencePathsError } = await supabaseServer
+      .from("evidence_proofs")
+      .select("storage_path");
+    if (evidencePathsError) {
+      return NextResponse.json({ error: evidencePathsError.message }, { status: 500 });
     }
-    return NextResponse.json({ ok: true });
+    const { data, error } = await supabaseServer.rpc("reset_hot_money_game");
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "Reset non riuscito" }, { status: 500 });
+    }
+    if (evidencePaths?.length) {
+      const removal = await supabaseServer.storage
+        .from("evidence-proofs")
+        .remove(evidencePaths.map((item) => item.storage_path));
+      if (removal.error) {
+        return NextResponse.json({ error: removal.error.message }, { status: 500 });
+      }
+    }
+    return NextResponse.json({ data });
   }
 
   return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
