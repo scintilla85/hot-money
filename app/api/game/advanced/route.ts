@@ -4,6 +4,8 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 
+const MAX_EVIDENCE_FILE_SIZE = 10 * 1024 * 1024;
+
 function nextDayAtFromSignature(signedAt: Date) {
   const minimum = signedAt.getTime() + 24 * 60 * 60 * 1000;
   const formatter = new Intl.DateTimeFormat("en-GB", {
@@ -204,8 +206,12 @@ export async function POST(request: Request) {
     const dataUrl = String(body.dataUrl);
     const match = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
     if (!match) return NextResponse.json({ error: "Foto non valida" }, { status: 400 });
+    const photoBuffer = Buffer.from(match[2], "base64");
+    if (photoBuffer.byteLength > MAX_EVIDENCE_FILE_SIZE) {
+      return NextResponse.json({ error: "Il file supera il limite di 10 MB." }, { status: 413 });
+    }
     const path = `alice/day-${Number(body.dayNumber)}/${crypto.randomUUID()}`;
-    const upload = await supabaseServer.storage.from("evidence-proofs").upload(path, Buffer.from(match[2], "base64"), {
+    const upload = await supabaseServer.storage.from("evidence-proofs").upload(path, photoBuffer, {
       contentType: match[1],
     });
     if (upload.error) return NextResponse.json({ error: upload.error.message }, { status: 500 });

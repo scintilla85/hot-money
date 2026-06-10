@@ -16,7 +16,7 @@ import {
   useGameStore,
 } from "@/lib/game-store";
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export default function ConcorrentePage() {
   const game = useGameStore();
@@ -130,7 +130,7 @@ export default function ConcorrentePage() {
     }
     if (file.size > MAX_FILE_SIZE) {
       setMedia(null);
-      setMessage("Il file supera il limite locale di 2 MB.");
+      setMessage("Il file supera il limite locale di 10 MB.");
       event.target.value = "";
       return;
     }
@@ -291,7 +291,7 @@ export default function ConcorrentePage() {
               <span>Foto prova</span>
               <input type="file" accept="image/*" onChange={selectMedia} />
               <b>{media ? media.fileName : "Seleziona file"}</b>
-              <small>Dimensione massima locale: 2 MB</small>
+              <small>Dimensione massima locale: 10 MB</small>
             </label>
             {media && (
               <div className="evidence-preview">
