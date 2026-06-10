@@ -674,10 +674,18 @@ export async function signContract(signer: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "sign_contract", signer: signer.trim() }),
   });
-  const result = (await response.json()) as { data?: RemoteGameState; error?: string };
+  const responseText = await response.text();
+  let result: { data?: RemoteGameState; error?: string; requestId?: string };
+
+  try {
+    result = JSON.parse(responseText) as typeof result;
+  } catch {
+    result = { error: responseText || `Errore server (${response.status})` };
+  }
 
   if (!response.ok || !result.data) {
-    throw new Error(result.error ?? "Firma non salvata");
+    const reference = result.requestId ? ` [${result.requestId}]` : "";
+    throw new Error(`${result.error ?? "Firma non salvata"}${reference}`);
   }
 
   applyRemoteState(result.data);

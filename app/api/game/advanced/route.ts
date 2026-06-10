@@ -57,8 +57,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   const role = await getServerRole();
-  if (!role || !supabaseServer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!role || !supabaseServer) {
+    console.error("[sign_contract] Request rejected before action", {
+      requestId,
+      role,
+      hasSupabaseServer: Boolean(supabaseServer),
+      hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const body = (await request.json()) as Record<string, unknown>;
 
   if (body.action === "sign_contract" && role === "contestant") {
@@ -66,28 +76,78 @@ export async function POST(request: Request) {
     if (!signer) return NextResponse.json({ error: "Firma richiesta" }, { status: 400 });
     const now = new Date();
     const nowIso = now.toISOString();
-    const { data, error } = await supabaseServer
-      .from("game_state")
-      .update({
-        contract_signed: true,
-        contract_signed_at: nowIso,
-        contract_signer: signer,
-        game_started_at: nowIso,
-        next_day_at: nextDayAtFromSignature(now),
-        current_day: 1,
-        updated_at: nowIso,
-      })
-      .eq("id", 1)
-      .select(
-        "current_day, prize_pool, director_orgasms, contestant_orgasms, notes, updated_at, contract_signed, contract_signed_at, contract_signer, game_completed, completed_at",
-      )
-      .single();
+    const nextDayAt = nextDayAtFromSignature(now);
 
-    if (error || !data) {
-      return NextResponse.json({ error: error?.message ?? "Firma non salvata" }, { status: 500 });
+    console.info("[sign_contract] Starting atomic signature", {
+      requestId,
+      role,
+      signerLength: signer.length,
+      signedAt: nowIso,
+      nextDayAt,
+    });
+
+    try {
+      const { data, error } = await supabaseServer.rpc("sign_hot_money_contract", {
+        p_signer: signer,
+        p_signed_at: nowIso,
+        p_next_day_at: nextDayAt,
+      });
+
+      if (!error && data) {
+        console.info("[sign_contract] Contract signed", {
+          requestId,
+          contractSigned: data.contract_signed,
+          contractSignedAt: data.contract_signed_at,
+          gameStartedAt: data.game_started_at,
+          currentDay: data.current_day,
+        });
+        return NextResponse.json({ data });
+      }
+
+      console.error("[sign_contract] Atomic signature returned an error", {
+        requestId,
+        message: error?.message ?? "No row returned",
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      });
+
+      const { data: currentState, error: stateError } = await supabaseServer
+        .from("game_state")
+        .select(
+          "current_day, prize_pool, director_orgasms, contestant_orgasms, notes, updated_at, contract_signed, contract_signed_at, contract_signer, game_started_at, game_completed, completed_at",
+        )
+        .eq("id", 1)
+        .single();
+
+      if (!stateError && currentState?.contract_signed) {
+        console.info("[sign_contract] Signature confirmed after RPC response error", {
+          requestId,
+          contractSignedAt: currentState.contract_signed_at,
+          gameStartedAt: currentState.game_started_at,
+          currentDay: currentState.current_day,
+        });
+        return NextResponse.json({ data: currentState });
+      }
+
+      console.error("[sign_contract] Contract signature not confirmed", {
+        requestId,
+        rpcError: error?.message,
+        stateError: stateError?.message,
+        contractSigned: currentState?.contract_signed ?? false,
+      });
+      return NextResponse.json(
+        { error: error?.message ?? stateError?.message ?? "Firma non salvata", requestId },
+        { status: 500 },
+      );
+    } catch (error) {
+      console.error("[sign_contract] Unexpected server error", {
+        requestId,
+        message: error instanceof Error ? error.message : String(error),
+        cause: error instanceof Error ? String(error.cause ?? "") : "",
+      });
+      return NextResponse.json({ error: "Firma non salvata", requestId }, { status: 500 });
     }
-
-    return NextResponse.json({ data });
   }
 
   if (body.action === "change_prize" && role === "director") {
