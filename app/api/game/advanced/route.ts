@@ -92,16 +92,17 @@ export async function POST(request: Request) {
         p_signed_at: nowIso,
         p_next_day_at: nextDayAt,
       });
+      const signedState = Array.isArray(data) ? data[0] : data;
 
-      if (!error && data) {
+      if (!error && signedState?.contract_signed === true) {
         console.info("[sign_contract] Contract signed", {
           requestId,
-          contractSigned: data.contract_signed,
-          contractSignedAt: data.contract_signed_at,
-          gameStartedAt: data.game_started_at,
-          currentDay: data.current_day,
+          contractSigned: signedState.contract_signed,
+          contractSignedAt: signedState.contract_signed_at,
+          gameStartedAt: signedState.game_started_at,
+          currentDay: signedState.current_day,
         });
-        return NextResponse.json({ data });
+        return NextResponse.json({ data: signedState });
       }
 
       console.error("[sign_contract] Atomic signature returned an error", {
@@ -110,6 +111,8 @@ export async function POST(request: Request) {
         code: error?.code,
         details: error?.details,
         hint: error?.hint,
+        returnedData: Boolean(signedState),
+        returnedContractSigned: signedState?.contract_signed ?? null,
       });
 
       const { data: currentState, error: stateError } = await supabaseServer
@@ -133,8 +136,15 @@ export async function POST(request: Request) {
       console.error("[sign_contract] Contract signature not confirmed", {
         requestId,
         rpcError: error?.message,
+        rpcCode: error?.code,
+        rpcReturnedData: Boolean(signedState),
+        rpcContractSigned: signedState?.contract_signed ?? null,
         stateError: stateError?.message,
+        stateErrorCode: stateError?.code,
         contractSigned: currentState?.contract_signed ?? false,
+        contractSignedAt: currentState?.contract_signed_at ?? null,
+        gameStartedAt: currentState?.game_started_at ?? null,
+        currentDay: currentState?.current_day ?? null,
       });
       return NextResponse.json(
         { error: error?.message ?? stateError?.message ?? "Firma non salvata", requestId },
