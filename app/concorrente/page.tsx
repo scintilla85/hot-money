@@ -202,7 +202,16 @@ export default function ConcorrentePage() {
           <div className="hero__edition"><span /><p>Black Edition</p><span /></div>
           <h1 id="contract-title">Hot Money</h1>
           <h2>Contratto di partecipazione</h2>
-          <div className="rules-copy contract-rules">{game.rules}</div>
+          <div className="contract-overview" aria-label="Riepilogo contratto">
+            <span className="contract-overview__diamond" aria-hidden="true" />
+            <ul>
+              <li><span aria-hidden="true">✓</span><p>Durata</p><strong>7 giorni</strong></li>
+              <li><span aria-hidden="true">✓</span><p>Montepremi iniziale</p><strong>300€</strong></li>
+              <li><span aria-hidden="true">✓</span><p>Missioni giornaliere</p></li>
+              <li><span aria-hidden="true">✓</span><p>Tentazioni facoltative</p></li>
+              <li><span aria-hidden="true">✓</span><p>Prove fotografiche</p></li>
+            </ul>
+          </div>
           <Link className="admin-button contract-rules-link" href="/regolamento">
             📜 Visualizza Regolamento Completo
           </Link>

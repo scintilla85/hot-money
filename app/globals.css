@@ -1067,6 +1067,73 @@ a {
   text-align: center;
 }
 
+.contract-overview {
+  position: relative;
+  margin-top: 1.4rem;
+  border-block: 1px solid rgba(214, 182, 91, 0.28);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(160, 8, 24, 0.16), transparent 45%),
+    rgba(0, 0, 0, 0.26);
+  padding: 1.8rem 0.15rem 0.5rem;
+}
+
+.contract-overview__diamond {
+  position: absolute;
+  top: -0.3rem;
+  left: calc(50% - 0.3rem);
+  width: 0.6rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--hot-red-bright);
+  background: var(--hot-black);
+  box-shadow: 0 0 1rem rgba(213, 23, 45, 0.7);
+  transform: rotate(45deg);
+}
+
+.contract-overview ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contract-overview li {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid rgba(214, 182, 91, 0.12);
+  padding: 0.75rem 0.6rem;
+}
+
+.contract-overview li:last-child {
+  border-bottom: 0;
+}
+
+.contract-overview li > span {
+  color: var(--hot-gold-bright);
+  font-size: 0.9rem;
+  text-shadow: 0 0 0.8rem rgba(214, 182, 91, 0.55);
+}
+
+.contract-overview p,
+.contract-overview strong {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.contract-overview p {
+  color: #d2c7af;
+}
+
+.contract-overview strong {
+  color: var(--hot-gold-bright);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+}
+
 .official-rules-page {
   position: relative;
   min-height: 100vh;
