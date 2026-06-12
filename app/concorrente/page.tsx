@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import PushNotifications from "@/components/push-notifications";
 import {
   chooseTemptation,
@@ -202,6 +203,9 @@ export default function ConcorrentePage() {
           <h1 id="contract-title">Hot Money</h1>
           <h2>Contratto di partecipazione</h2>
           <div className="rules-copy contract-rules">{game.rules}</div>
+          <Link className="admin-button contract-rules-link" href="/regolamento">
+            📜 Visualizza Regolamento Completo
+          </Link>
           <form className="contract-form" onSubmit={handleContract}>
             <label className="contract-accept"><input name="accepted" type="checkbox" required /><span>Accetto il regolamento</span></label>
             <label><span>Firma concorrente</span><input name="signature" type="text" autoComplete="name" required /></label>

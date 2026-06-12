@@ -1058,6 +1058,102 @@ a {
   font-weight: 600;
 }
 
+.contract-rules-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.official-rules-page {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding:
+    max(1.5rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    max(2rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+}
+
+.official-rules {
+  width: min(100%, 52rem);
+  margin: 0 auto;
+}
+
+.official-rules__header {
+  display: grid;
+  justify-items: center;
+  border-bottom: 1px solid rgba(214, 182, 91, 0.35);
+  padding: clamp(1rem, 5vw, 2.5rem) 0;
+  text-align: center;
+}
+
+.official-rules__header h1,
+.official-rules__header h2 {
+  color: var(--hot-gold-bright);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.official-rules__header h1 {
+  margin: 1.4rem 0 0;
+  font-size: clamp(3rem, 14vw, 6rem);
+  line-height: 0.9;
+}
+
+.official-rules__header h2 {
+  margin: 1rem 0 0;
+  font-size: clamp(0.9rem, 4vw, 1.35rem);
+  letter-spacing: 0.16em;
+}
+
+.official-rules__articles {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.2rem;
+}
+
+.official-rules__article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  border: 1px solid rgba(214, 182, 91, 0.3);
+  background: linear-gradient(145deg, rgba(20, 14, 15, 0.94), rgba(5, 5, 5, 0.98));
+  padding: clamp(1rem, 4vw, 1.5rem);
+}
+
+.official-rules__article > span {
+  color: var(--hot-red-bright);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.3rem;
+}
+
+.official-rules__article h3 {
+  margin: 0;
+  color: var(--hot-gold-bright);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1rem, 4vw, 1.25rem);
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.official-rules__article p {
+  margin: 0.75rem 0 0;
+  color: #d2c7af;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.official-rules__back {
+  width: min(100%, 24rem);
+  margin: 1.5rem auto 0;
+}
+
 .admin-page {
   min-height: 100vh;
   min-height: 100svh;
